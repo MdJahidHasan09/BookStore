@@ -34,7 +34,7 @@ router.get('/new', async (req, res) => {
     await renderNewPage(res, new Book());
 });
 
-//Create book route
+//Create a book route
 router.post('/', async (req, res) => {
     const book = new Book({
         title: req.body.title,
@@ -47,22 +47,96 @@ router.post('/', async (req, res) => {
     try {
         console.log(book);
         const newBook = await book.save();
-        // res.redirect(`books/${newBook.id}`);
-        res.redirect(`books`)
+        res.redirect(`books/${newBook.id}`);
     } catch (e) {
         await renderNewPage(res, book, true);
     }
 });
 
+//Show book by id
+router.get('/:id', async (req, res) => {
+    try {
+        const book = await Book.findById(req.params.id)
+            .populate('author')
+            .exec()
+        res.render('books/show', { book: book });
+    } catch (e) {
+        res.redirect('/')
+    }
+});
+
+//Edit Book Route
+router.get('/:id/edit', async(req, res) => {
+    try{
+        const book = await Book.findById(req.params.id);
+        renderEditPage(res, book);
+    } catch (e) {
+        res.redirect('/');
+    }
+})
+
+//Update a book route
+router.put('/:id', async (req, res) => {
+    let book;
+    try {
+        book = await Book.findById(req.params.id);
+        book.title = req.body.title;
+        book.author = req.body.author;
+        book.publishDate = new Date(req.body.publishDate);
+        book.pageCount = req.body.pageCount;
+        book.description = req.body.description;
+        if(req.body.cover != null && req.body.cover !== '') {
+            saveCover(book, req.body.cover);
+        }
+        await book.save();
+        res.redirect(`/books/${book.id}`);
+    } catch (e) {
+        if(book != null) await renderEditPage(res, book, true);
+        else res.redirect('/');
+    }
+});
+
+//Delete Book Page
+router.delete('/:id', async(req, res) => {
+    let book;
+    try{
+        book = await Book.findById(req.params.id);
+        await book.remove();
+        res.redirect('/books');
+    } catch (e) {
+        console.log(e);
+        if(book != null) {
+            res.render(`book/show`, {
+                book: book,
+                errorMessage: 'Could not delete book'
+            })
+        }
+         else {
+            res.redirect('/');
+        }
+    }
+})
+
 const renderNewPage = async (res, book, hasError = false) => {
+    await renderFormPage(res, book, 'new', hasError);
+}
+
+const renderEditPage = async (res, book, hasError = false) => {
+    await renderFormPage(res, book, 'edit', hasError);
+}
+
+const renderFormPage = async (res, book, form, hasError = false) => {
     try {
         const authors = await Author.find({});
         const params = {
             authors: authors,
             book: book
         };
-        if(hasError) params.errorMessage = 'Error while creating book';
-        res.render('books/new', params);
+        if(hasError) {
+            if(form === 'edit') params.errorMessage = 'Error while editing book';
+            else params.errorMessage = 'Error while creating book';
+        }
+        res.render(`books/${form}`, params);
     } catch (e) {
         console.log(e);
         res.redirect('/books');
